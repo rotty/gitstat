@@ -8,6 +8,51 @@ struct Status {
     untracked: u32,
 }
 
+impl Status {
+    fn from_repo(repo: &git2::Repository) -> anyhow::Result<Self> {
+        let wt_changed_status = {
+            use git2::Status;
+            Status::WT_MODIFIED | Status::WT_DELETED | Status::WT_TYPECHANGE | Status::WT_RENAMED
+        };
+        let index_changed_status = {
+            use git2::Status;
+            Status::INDEX_MODIFIED
+                | Status::INDEX_DELETED
+                | Status::INDEX_TYPECHANGE
+                | Status::INDEX_RENAMED
+        };
+
+        let mut staged = 0;
+        let mut conflicts = 0;
+        let mut changed = 0;
+        let mut untracked = 0;
+
+        let mut options = git2::StatusOptions::new();
+        options.include_untracked(true);
+        for entry in repo.statuses(Some(&mut options))?.iter() {
+            let status = entry.status();
+            if status.is_conflicted() {
+                conflicts += 1;
+            }
+            if status.intersects(wt_changed_status) {
+                changed += 1;
+            }
+            if status.is_wt_new() {
+                untracked += 1;
+            }
+            if status.intersects(index_changed_status) {
+                staged += 1;
+            }
+        }
+        Ok(Status {
+            staged,
+            conflicts,
+            changed,
+            untracked,
+        })
+    }
+}
+
 #[derive(Debug, Clone)]
 struct BranchInfo {
     name: String,
@@ -48,13 +93,7 @@ impl GitInfo {
                         name: name.into(),
                         remote: None, // FIXME
                     },
-                    status: Status {
-                        // FIXME
-                        staged: 0,
-                        conflicts: 0,
-                        changed: 0,
-                        untracked: 0,
-                    },
+                    status: Status::from_repo(repo)?,
                     oid: commit.id(),
                 }
             }
@@ -77,24 +116,30 @@ impl<'a> fmt::Display for Prompt<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use GitInfo::*;
         match self.info {
-            Branch {
-                branch,
-                status,
-                ..
-            } => {
+            Branch { branch, status, .. } => {
                 let (ahead, behind) = if let Some(remote) = &branch.remote {
                     remote.distance().map_or((0, 0), |d| d.as_pair())
                 } else {
                     (0, 0)
                 };
-                write!(f, "{} {} {} {} {} {}", branch.name, ahead, behind, status.staged, status.conflicts, status.untracked)?;
+                write!(
+                    f,
+                    "{} {} {} {} {} {} {}",
+                    branch.name,
+                    ahead,
+                    behind,
+                    status.staged,
+                    status.conflicts,
+                    status.changed,
+                    status.untracked
+                )?;
             }
             Detached { oid } => {
-                write!(f, ":{} 0 0 0 0 0", oid)?;
+                write!(f, ":{} 0 0 0 0 0 0", oid)?;
             }
             Unborn => {
-                write!(f, "? 0 0 0 0 0")?;
-            },
+                write!(f, "? 0 0 0 0 0 0")?;
+            }
         }
         Ok(())
     }
