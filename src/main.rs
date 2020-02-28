@@ -53,6 +53,25 @@ impl Status {
             untracked,
         })
     }
+
+    fn display_stat(&self) -> DisplayStat<'_> {
+        return DisplayStat { status: self };
+    }
+}
+
+struct DisplayStat<'a> {
+    status: &'a Status,
+}
+
+impl<'a> fmt::Display for DisplayStat<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let status = self.status;
+        write!(
+            f,
+            "{} {} {} {}",
+            status.staged, status.conflicts, status.changed, status.untracked
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -104,18 +123,31 @@ enum GitInfo {
     },
     Detached {
         oid: git2::Oid,
+        status: Status,
     },
-    Unborn,
+    Unborn {
+        status: Status,
+    },
 }
 
 impl GitInfo {
     fn from_repo(repo: &git2::Repository) -> anyhow::Result<Self> {
         let head = match repo.head() {
             Ok(head) => head,
-            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => return Ok(GitInfo::Unborn),
+            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => {
+                return Ok(GitInfo::Unborn {
+                    status: Status::from_repo(repo)?,
+                })
+            }
             Err(e) => return Err(e.into()),
         };
         let commit = head.peel_to_commit()?;
+        if repo.head_detached()? {
+            return Ok(GitInfo::Detached {
+                oid: commit.id(),
+                status: Status::from_repo(repo)?,
+            });
+        }
         let info = match head.shorthand() {
             Some(name) => GitInfo::Branch {
                 branch: BranchInfo {
@@ -152,21 +184,19 @@ impl<'a> fmt::Display for Prompt<'a> {
                 };
                 write!(
                     f,
-                    "{} {} {} {} {} {} {}",
+                    "{} {} {} {}",
                     branch.name,
                     ahead,
                     behind,
-                    status.staged,
-                    status.conflicts,
-                    status.changed,
-                    status.untracked
+                    status.display_stat(),
                 )?;
             }
-            Detached { oid } => {
-                write!(f, ":{} 0 0 0 0 0 0", oid)?;
+            Detached { oid, status } => {
+                let short_oid: String = oid.to_string().chars().take(6).collect();
+                write!(f, ":{} 0 0 {}", short_oid, status.display_stat())?;
             }
-            Unborn => {
-                write!(f, "? 0 0 0 0 0 0")?;
+            Unborn { status } => {
+                write!(f, "? 0 0 {}", status.display_stat())?;
             }
         }
         Ok(())
