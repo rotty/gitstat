@@ -1,5 +1,7 @@
 use std::fmt;
 
+use anyhow::anyhow;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Status {
     staged: u32,
@@ -65,6 +67,34 @@ struct Remote {
     distance: Option<Distance>,
 }
 
+impl Remote {
+    fn from_repo(repo: &git2::Repository, local_branch: &str) -> anyhow::Result<Option<Self>> {
+        let branch = repo.find_branch(local_branch, git2::BranchType::Local)?;
+        let upstream = match branch.upstream() {
+            Ok(upstream) => upstream,
+            Err(e) if e.code() == git2::ErrorCode::NotFound => {
+                return Ok(None);
+            }
+            Err(e) => return Err(e.into()),
+        };
+        let local_commit = branch.get().peel_to_commit()?;
+        let upstream_commit = upstream.get().peel_to_commit()?;
+        let (ahead, behind) = repo.graph_ahead_behind(local_commit.id(), upstream_commit.id())?;
+        Ok(Some(Remote {
+            branch: upstream
+                .name()?
+                .ok_or_else(|| {
+                    anyhow!(
+                        "non-UTF8 upstream branch name for local branch  {}",
+                        local_branch
+                    )
+                })?
+                .into(),
+            distance: Some(Distance { ahead, behind }),
+        }))
+    }
+}
+
 #[derive(Debug)]
 enum GitInfo {
     Branch {
@@ -87,16 +117,14 @@ impl GitInfo {
         };
         let commit = head.peel_to_commit()?;
         let info = match head.shorthand() {
-            Some(name) => {
-                GitInfo::Branch {
-                    branch: BranchInfo {
-                        name: name.into(),
-                        remote: None, // FIXME
-                    },
-                    status: Status::from_repo(repo)?,
-                    oid: commit.id(),
-                }
-            }
+            Some(name) => GitInfo::Branch {
+                branch: BranchInfo {
+                    name: name.into(),
+                    remote: Remote::from_repo(repo, name)?,
+                },
+                status: Status::from_repo(repo)?,
+                oid: commit.id(),
+            },
             None => {
                 unimplemented!();
             }
@@ -153,12 +181,12 @@ impl Remote {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Distance {
-    ahead: u32,
-    behind: u32,
+    ahead: usize,
+    behind: usize,
 }
 
 impl Distance {
-    fn as_pair(self) -> (u32, u32) {
+    fn as_pair(self) -> (usize, usize) {
         (self.ahead, self.behind)
     }
 }
@@ -168,14 +196,21 @@ fn info() -> anyhow::Result<GitInfo> {
     GitInfo::from_repo(&repo)
 }
 
+// TODO: use environment variable or command-line option here
+const DEBUG: bool = true;
+
 fn main() {
-    match info() {
+    let rc = match info() {
         Ok(info) => {
             print!("{}", info.prompt());
+            0
         }
-        Err(_) => {
-            // intentionally swallow error; TODO: add way to print error for
-            // debugging.
+        Err(e) => {
+            if DEBUG {
+                eprintln!("error: {}", e);
+            }
+            1
         }
-    }
+    };
+    std::process::exit(rc);
 }
