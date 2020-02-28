@@ -1,0 +1,10 @@
+[package]
+name = "zsh-git-prompt"
+version = "0.1.0"
+authors = ["Andreas Rottmann <mail@r0tty.org>"]
+license = "MIT"
+edition = "2018"
+
+[dependencies]
+git2 = { version = "0.11.0", default-features = false }
+anyhow = "1.0.26"
