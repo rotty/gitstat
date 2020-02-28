@@ -221,9 +221,15 @@ impl Distance {
     }
 }
 
-fn info() -> anyhow::Result<GitInfo> {
-    let repo = git2::Repository::discover(".")?;
-    GitInfo::from_repo(&repo)
+fn info() -> anyhow::Result<Option<GitInfo>> {
+    let repo = match git2::Repository::discover(".") {
+        Ok(repo) => repo,
+        Err(e) if e.code() == git2::ErrorCode::NotFound => {
+            return Ok(None);
+        }
+        Err(e) => return Err(e.into()),
+    };
+    Ok(Some(GitInfo::from_repo(&repo)?))
 }
 
 // TODO: use environment variable or command-line option here
@@ -231,8 +237,11 @@ const DEBUG: bool = true;
 
 fn main() {
     let rc = match info() {
-        Ok(info) => {
+        Ok(Some(info)) => {
             print!("{}", info.prompt());
+            0
+        }
+        Ok(None) => {
             0
         }
         Err(e) => {
