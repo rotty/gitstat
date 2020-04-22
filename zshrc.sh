@@ -4,7 +4,7 @@
 autoload -U colors
 colors
 
-GITSTAT_COMMAND="${GISTAT_COMMAND:-gitstat}"
+GITSTAT_COMMAND="${GITSTAT_COMMAND:-gitstat}"
 
 # Allow for functions in the prompt.
 setopt PROMPT_SUBST
