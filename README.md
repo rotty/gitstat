@@ -7,7 +7,7 @@ drop-in replacement for the Python script.
 
 The current differences to `gitstatus.py` are:
 
-- Implemented with the [Rust libgit2 bindings], so the binary is
+- Implemented with the Rust [libgit2 bindings], so the binary is
   self-contained and does not fork git, which should be beneficial for
   performance.
 - Handles unborn branches, so you get a status for a
