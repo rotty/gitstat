@@ -2,7 +2,6 @@
 name = "gitstat"
 description = "Git status for shell prompt integration"
 repository = "https://github.com/rotty/gitstat"
-homepage = "https://github.com/rotty/gitstat"
 readme = "README.md"
 version = "0.1.0"
 authors = ["Andreas Rottmann <mail@r0tty.org>"]
