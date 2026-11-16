@@ -82,6 +82,7 @@ struct BranchInfo {
 
 #[derive(Debug, Clone)]
 struct Remote {
+    #[expect(unused)]
     branch: String,
     distance: Option<Distance>,
 }
@@ -119,6 +120,7 @@ enum GitInfo {
     Branch {
         branch: BranchInfo,
         status: Status,
+        #[expect(unused)]
         oid: git2::Oid,
     },
     Detached {
