@@ -149,7 +149,7 @@ impl GitInfo {
             });
         }
         let info = match head.shorthand() {
-            Some(name) => GitInfo::Branch {
+            Ok(name) => GitInfo::Branch {
                 branch: BranchInfo {
                     name: name.into(),
                     remote: Remote::from_repo(repo, name)?,
@@ -157,7 +157,7 @@ impl GitInfo {
                 status: Status::from_repo(repo)?,
                 oid: commit.id(),
             },
-            None => {
+            Err(_) => {
                 unimplemented!();
             }
         };
@@ -241,9 +241,7 @@ fn main() {
             print!("{}", info.prompt());
             0
         }
-        Ok(None) => {
-            0
-        }
+        Ok(None) => 0,
         Err(e) => {
             if DEBUG {
                 eprintln!("error: {}", e);
